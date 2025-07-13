@@ -1,0 +1,16 @@
+{
+  "name": "America Party Founder #0",
+  "description": "A founding member of the America Party On-Chain DAO. This badge represents a permanent, on-chain right to vote on all major party decisions.",
+  "image": "ipfs://bafybeigomeke6jo6py4ur4ir5jmxncqt7iukv5xn5255qneh7p4m36wu3e/americaparty-logo.png",
+  "attributes": [
+    {
+      "trait_type": "Membership Tier",
+      "value": "Founder"
+    },
+    {
+      "trait_type": "Badge Number",
+      "display_type": "number",
+      "value": 0
+    }
+  ]
+}

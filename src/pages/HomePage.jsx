@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { ethers } from 'ethers';
 import { WalletContext } from '../contexts/WalletContext.jsx'; 
-import mainLogo from '../assets/americaparty-logo.png';
+import mainLogo from '/americaparty-logo.png'; // Note the path starts with a "/"
 import './HomePage.css';
 
 // --- Configuration & ABIs ---
