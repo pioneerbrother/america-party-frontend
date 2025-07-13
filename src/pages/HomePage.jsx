@@ -1,12 +1,12 @@
-import React, { useState, useEffect, useContext, useCallback } from 'react';
+import React, { useState, useEffect, useContext, useRef } from 'react';
 import { ethers } from 'ethers';
 import { WalletContext } from '../contexts/WalletContext.jsx'; 
-import mainLogo from '/americaparty-logo.png'; // Correct logo path
+import mainLogo from '/americaparty-logo.png';
 import './HomePage.css';
 
 // --- Configuration & ABIs ---
 const badgeMinterAddress = import.meta.env.VITE_BADGE_MINTER_ADDRESS;
-const governorAddress = import.meta.env.VITE_GOVERNOR_CONTRACT_ADDRESS; // RESTORED THIS LINE
+const governorAddress = import.meta.env.VITE_GOVERNOR_CONTRACT_ADDRESS;
 const usdcAddress = import.meta.env.VITE_USDC_ADDRESS;
 const publicRpcUrl = import.meta.env.VITE_PUBLIC_POLYGON_RPC_URL || "https://polygon-rpc.com/";
 import BadgeMinterABI from '../abis/BadgeMinter.json';
@@ -22,39 +22,45 @@ function HomePage() {
     const [mintedCount, setMintedCount] = useState(0);
     const [totalSupply] = useState(10000);
     const [currentPrice, setCurrentPrice] = useState("...");
-
-    // --- Robust Data Fetching Logic ---
-    const fetchData = useCallback(async () => {
-        if (!badgeMinterAddress) return;
-        try {
-            const readOnlyProvider = new ethers.JsonRpcProvider(publicRpcUrl);
-            const minterContract = new ethers.Contract(badgeMinterAddress, BadgeMinterABI.abi, readOnlyProvider);
-            const count = await minterContract.totalMinted();
-            
-            setMintedCount(prevCount => {
-                const newCount = Number(count);
-                return newCount >= prevCount ? newCount : prevCount;
-            });
-
-            if (Number(count) < totalSupply) {
-                const priceData = await minterContract.getPriceForQuantity(count, 1);
-                setCurrentPrice(ethers.formatUnits(priceData.totalPrice, 6));
-            } else {
-                setCurrentPrice("N/A");
-            }
-        } catch (e) {
-            console.error("Data fetch error:", e);
-        } finally {
-            setIsLoadingData(false);
-        }
-    }, [totalSupply]);
-
-    // --- useEffect using the robust fetchData function ---
+    
+    // --- THIS IS THE NEW, CORRECT DATA FETCHING ---
     useEffect(() => {
-        fetchData();
-        const interval = setInterval(fetchData, 10000);
-        return () => clearInterval(interval);
-    }, [fetchData]);
+        let isMounted = true; // Prevents state updates on an unmounted component
+        
+        const fetchData = async () => {
+            if (!badgeMinterAddress) return;
+            try {
+                const readOnlyProvider = new ethers.JsonRpcProvider(publicRpcUrl);
+                const minterContract = new ethers.Contract(badgeMinterAddress, BadgeMinterABI.abi, readOnlyProvider);
+
+                const count = await minterContract.totalMinted();
+
+                if (isMounted) {
+                    setMintedCount(Number(count));
+
+                    if (Number(count) < totalSupply) {
+                        const priceData = await minterContract.getPriceForQuantity(count, 1);
+                        setCurrentPrice(ethers.formatUnits(priceData.totalPrice, 6));
+                    } else {
+                        setCurrentPrice("N/A");
+                    }
+                    setIsLoadingData(false);
+                }
+            } catch (e) {
+                console.error("Data fetch error:", e);
+                if (isMounted) setIsLoadingData(false);
+            }
+        };
+
+        fetchData(); // Fetch once on load
+        
+        const interval = setInterval(fetchData, 15000); // And then check every 15 seconds
+
+        return () => {
+            isMounted = false; // Cleanup function to prevent memory leaks
+            clearInterval(interval);
+        };
+    }, [totalSupply]);
 
     // --- Minting Logic ---
     const handlePurchase = async () => {
@@ -65,19 +71,26 @@ function HomePage() {
         try {
             const minterContract = new ethers.Contract(badgeMinterAddress, BadgeMinterABI.abi, signer);
             const usdcContract = new ethers.Contract(usdcAddress, ERC20ABI, signer);
-            const priceData = await minterContract.getPriceForQuantity(mintedCount, 1);
+            const initialMintedCount = await minterContract.totalMinted();
+            const priceData = await minterContract.getPriceForQuantity(initialMintedCount, 1);
             const totalPrice = priceData.totalPrice;
-            setFeedback(`Requesting approval to spend ${currentPrice} USDC...`);
+
+            setFeedback(`Requesting approval to spend ${ethers.formatUnits(totalPrice, 6)} USDC...`);
             const approveTx = await usdcContract.approve(badgeMinterAddress, totalPrice);
             setFeedback("Waiting for approval confirmation...");
             await approveTx.wait();
+
             setFeedback("Securing your Founder's Badge...");
             const purchaseTx = await minterContract.purchaseBadges(1);
             setFeedback("Finalizing on the blockchain...");
-            await purchaseTx.wait();
+            const receipt = await purchaseTx.wait();
+
             setFeedback("🎉 Success! Welcome, Founder.");
             
-            await fetchData(); // Immediately fetch the latest count
+            // After success, we directly update the state with the new, correct count.
+            // This is faster and more reliable than waiting for the interval.
+            const newCount = await minterContract.totalMinted();
+            setMintedCount(Number(newCount));
 
         } catch (error) {
             console.error("Purchase failed:", error);
@@ -86,6 +99,8 @@ function HomePage() {
             setIsLoading(false);
         }
     };
+    
+    
     
     // JSX variables
     const isSoldOut = mintedCount >= totalSupply;
