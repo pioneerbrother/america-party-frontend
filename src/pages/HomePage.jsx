@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useRef } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { ethers } from 'ethers';
 import { WalletContext } from '../contexts/WalletContext.jsx'; 
 import mainLogo from '/americaparty-logo.png';
@@ -23,44 +23,41 @@ function HomePage() {
     const [totalSupply] = useState(10000);
     const [currentPrice, setCurrentPrice] = useState("...");
     
-    // --- THIS IS THE NEW, CORRECT DATA FETCHING ---
+    // --- Data Fetching Logic ---
     useEffect(() => {
-        let isMounted = true; // Prevents state updates on an unmounted component
-        
         const fetchData = async () => {
             if (!badgeMinterAddress) return;
             try {
                 const readOnlyProvider = new ethers.JsonRpcProvider(publicRpcUrl);
                 const minterContract = new ethers.Contract(badgeMinterAddress, BadgeMinterABI.abi, readOnlyProvider);
-
                 const count = await minterContract.totalMinted();
 
-                if (isMounted) {
-                    setMintedCount(Number(count));
+                // === THIS IS THE FINAL, UNBREAKABLE FIX ===
+                // We use a functional update to get the previous count.
+                // We ONLY update the state if the new number from the blockchain is HIGHER.
+                // This makes it impossible for the count to go backward due to a slow server.
+                setMintedCount(prevCount => {
+                    const newCount = Number(count);
+                    return newCount > prevCount ? newCount : prevCount;
+                });
 
-                    if (Number(count) < totalSupply) {
-                        const priceData = await minterContract.getPriceForQuantity(count, 1);
-                        setCurrentPrice(ethers.formatUnits(priceData.totalPrice, 6));
-                    } else {
-                        setCurrentPrice("N/A");
-                    }
-                    setIsLoadingData(false);
+                if (Number(count) < totalSupply) {
+                    const priceData = await minterContract.getPriceForQuantity(count, 1);
+                    setCurrentPrice(ethers.formatUnits(priceData.totalPrice, 6));
+                } else {
+                    setCurrentPrice("N/A");
                 }
             } catch (e) {
                 console.error("Data fetch error:", e);
-                if (isMounted) setIsLoadingData(false);
+            } finally {
+                setIsLoadingData(false);
             }
         };
 
-        fetchData(); // Fetch once on load
-        
-        const interval = setInterval(fetchData, 15000); // And then check every 15 seconds
-
-        return () => {
-            isMounted = false; // Cleanup function to prevent memory leaks
-            clearInterval(interval);
-        };
-    }, [totalSupply]);
+        fetchData();
+        const interval = setInterval(fetchData, 10000); // Check every 10 seconds
+        return () => clearInterval(interval);
+    }, []); // Empty dependency array is correct here
 
     // --- Minting Logic ---
     const handlePurchase = async () => {
@@ -74,23 +71,19 @@ function HomePage() {
             const initialMintedCount = await minterContract.totalMinted();
             const priceData = await minterContract.getPriceForQuantity(initialMintedCount, 1);
             const totalPrice = priceData.totalPrice;
-
             setFeedback(`Requesting approval to spend ${ethers.formatUnits(totalPrice, 6)} USDC...`);
             const approveTx = await usdcContract.approve(badgeMinterAddress, totalPrice);
             setFeedback("Waiting for approval confirmation...");
             await approveTx.wait();
-
             setFeedback("Securing your Founder's Badge...");
             const purchaseTx = await minterContract.purchaseBadges(1);
             setFeedback("Finalizing on the blockchain...");
-            const receipt = await purchaseTx.wait();
-
+            await purchaseTx.wait();
             setFeedback("🎉 Success! Welcome, Founder.");
             
-            // After success, we directly update the state with the new, correct count.
-            // This is faster and more reliable than waiting for the interval.
+            // After success, we directly update with the latest count.
             const newCount = await minterContract.totalMinted();
-            setMintedCount(Number(newCount));
+            setMintedCount(Number(newCount)); // This provides instant, correct feedback
 
         } catch (error) {
             console.error("Purchase failed:", error);
