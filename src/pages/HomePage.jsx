@@ -1,12 +1,12 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { ethers } from 'ethers';
 import { WalletContext } from '../contexts/WalletContext.jsx'; 
-import mainLogo from '/americaparty-logo.png';
+import mainLogo from '/americaparty-logo.png'; // Correct logo path
 import './HomePage.css';
 
 // --- Configuration & ABIs ---
 const badgeMinterAddress = import.meta.env.VITE_BADGE_MINTER_ADDRESS;
-const governorAddress = import.meta.env.VITE_GOVERNOR_CONTRACT_ADDRESS;
+const governorAddress = import.meta.env.VITE_GOVERNOR_CONTRACT_ADDRESS; // RESTORED THIS LINE
 const usdcAddress = import.meta.env.VITE_USDC_ADDRESS;
 const publicRpcUrl = import.meta.env.VITE_PUBLIC_POLYGON_RPC_URL || "https://polygon-rpc.com/";
 import BadgeMinterABI from '../abis/BadgeMinter.json';
@@ -23,33 +23,38 @@ function HomePage() {
     const [totalSupply] = useState(10000);
     const [currentPrice, setCurrentPrice] = useState("...");
 
-    // --- Effect to Fetch Live Data (Corrected) ---
-    useEffect(() => {
-        const fetchData = async () => {
-            if (!badgeMinterAddress) return;
-            try {
-                const readOnlyProvider = new ethers.JsonRpcProvider(publicRpcUrl);
-                const minterContract = new ethers.Contract(badgeMinterAddress, BadgeMinterABI.abi, readOnlyProvider);
-                const count = await minterContract.totalMinted();
-                setMintedCount(Number(count));
+    // --- Robust Data Fetching Logic ---
+    const fetchData = useCallback(async () => {
+        if (!badgeMinterAddress) return;
+        try {
+            const readOnlyProvider = new ethers.JsonRpcProvider(publicRpcUrl);
+            const minterContract = new ethers.Contract(badgeMinterAddress, BadgeMinterABI.abi, readOnlyProvider);
+            const count = await minterContract.totalMinted();
+            
+            setMintedCount(prevCount => {
+                const newCount = Number(count);
+                return newCount >= prevCount ? newCount : prevCount;
+            });
 
-                if (Number(count) < totalSupply) {
-                    const priceData = await minterContract.getPriceForQuantity(count, 1);
-                    setCurrentPrice(ethers.formatUnits(priceData.totalPrice, 6));
-                } else {
-                    setCurrentPrice("N/A");
-                }
-            } catch (e) {
-                console.error("Data fetch error:", e);
-            } finally {
-                setIsLoadingData(false);
+            if (Number(count) < totalSupply) {
+                const priceData = await minterContract.getPriceForQuantity(count, 1);
+                setCurrentPrice(ethers.formatUnits(priceData.totalPrice, 6));
+            } else {
+                setCurrentPrice("N/A");
             }
-        };
+        } catch (e) {
+            console.error("Data fetch error:", e);
+        } finally {
+            setIsLoadingData(false);
+        }
+    }, [totalSupply]);
 
+    // --- useEffect using the robust fetchData function ---
+    useEffect(() => {
         fetchData();
-        const interval = setInterval(fetchData, 15000); // Check every 15 seconds
+        const interval = setInterval(fetchData, 10000);
         return () => clearInterval(interval);
-    }, []);
+    }, [fetchData]);
 
     // --- Minting Logic ---
     const handlePurchase = async () => {
@@ -71,8 +76,9 @@ function HomePage() {
             setFeedback("Finalizing on the blockchain...");
             await purchaseTx.wait();
             setFeedback("🎉 Success! Welcome, Founder.");
-            const newCount = await minterContract.totalMinted();
-            setMintedCount(Number(newCount));
+            
+            await fetchData(); // Immediately fetch the latest count
+
         } catch (error) {
             console.error("Purchase failed:", error);
             setFeedback(error.reason || "Transaction failed.");
@@ -81,6 +87,7 @@ function HomePage() {
         }
     };
     
+    // JSX variables
     const isSoldOut = mintedCount >= totalSupply;
     const TALLY_PROPOSE_URL = `https://www.tally.xyz/gov/${governorAddress}/propose`;
     const TALLY_VOTE_URL = `https://www.tally.xyz/gov/${governorAddress}`;
@@ -97,9 +104,7 @@ function HomePage() {
                             <div className="supply-counter">
                                 <div className="supply-text">
                                     <span>FOUNDERS' BADGES CLAIMED</span>
-                                    <span>
-                                        {isLoadingData ? "..." : mintedCount.toLocaleString()} / {totalSupply.toLocaleString()}
-                                    </span>
+                                    <span>{isLoadingData ? "..." : mintedCount.toLocaleString()} / {totalSupply.toLocaleString()}</span>
                                 </div>
                                 <div className="progress-bar-background"><div className="progress-bar-foreground" style={{ width: `${(mintedCount / totalSupply) * 100}%` }}></div></div>
                             </div>
@@ -116,9 +121,7 @@ function HomePage() {
                                 <div className="stat-item">
                                     <span className="stat-icon">👥</span>
                                     <div className="stat-text-content">
-                                        <span className="stat-value">
-                                            {isLoadingData ? "..." : mintedCount.toLocaleString()}
-                                        </span>
+                                        <span className="stat-value">{isLoadingData ? "..." : mintedCount.toLocaleString()}</span>
                                         <span className="stat-label">Total Founders</span>
                                     </div>
                                 </div>
