@@ -6,35 +6,30 @@ import './HomePage.css';
 
 // --- Configuration & ABIs ---
 const badgeMinterAddress = import.meta.env.VITE_BADGE_MINTER_ADDRESS;
-const usdcAddress = import.meta.env.VITE_USDC_ADDRESS;
 const governorAddress = import.meta.env.VITE_GOVERNOR_CONTRACT_ADDRESS;
+const usdcAddress = import.meta.env.VITE_USDC_ADDRESS;
 const publicRpcUrl = import.meta.env.VITE_PUBLIC_POLYGON_RPC_URL || "https://polygon-rpc.com/";
 import BadgeMinterABI from '../abis/BadgeMinter.json';
-import GovernorABI from '../abis/GovernorAlphaParty.json';
 import ERC20ABI from '../config/abis/ERC20.json'; 
 
 function HomePage() {
-    // --- State & Logic (Complete and Correct) ---
     const { signer, account, chainId, connectWallet } = useContext(WalletContext);
+
+    // --- State & Logic (Complete and Correct) ---
     const [isLoading, setIsLoading] = useState(false);
     const [feedback, setFeedback] = useState("Connect your wallet to begin.");
     const [mintedCount, setMintedCount] = useState(0);
     const [totalSupply] = useState(10000);
     const [currentPrice, setCurrentPrice] = useState("...");
-    const [treasuryBalance, setTreasuryBalance] = useState("...");
 
     useEffect(() => {
         const fetchData = async () => {
-            if (!badgeMinterAddress || !usdcAddress) return;
+            if (!badgeMinterAddress) return;
             try {
                 const readOnlyProvider = new ethers.JsonRpcProvider(publicRpcUrl);
                 const minterContract = new ethers.Contract(badgeMinterAddress, BadgeMinterABI.abi, readOnlyProvider);
-                const usdcContract = new ethers.Contract(usdcAddress, ERC20ABI, readOnlyProvider);
                 const count = await minterContract.totalMinted();
                 setMintedCount(Number(count));
-                const treasuryAddr = await minterContract.treasuryWallet();
-                const balance = await usdcContract.balanceOf(treasuryAddr); 
-                setTreasuryBalance(parseFloat(ethers.formatUnits(balance, 6)).toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }));
                 if (Number(count) < totalSupply) {
                     const priceData = await minterContract.getPriceForQuantity(count, 1);
                     setCurrentPrice(ethers.formatUnits(priceData.totalPrice, 6));
@@ -84,14 +79,16 @@ function HomePage() {
             {/* === HERO SECTION === */}
             <div className="hero-section">
                 <div className="page-grid">
-                    {/* --- LEFT COLUMN --- */}
                     <div className="left-column">
                         <img src={mainLogo} alt="America Party" className="main-logo" />
                         <div className="mint-card">
                             <h1>The First 10,000.</h1>
                             <p className="subtitle">Become a Founding Member of the America Party. Secure one of only 10,000 governance badges ever to be created.</p>
                             <div className="supply-counter">
-                                <div className="supply-text"><span>FOUNDERS' BADGES CLAIMED</span><span>{mintedCount.toLocaleString()} / {totalSupply.toLocaleString()}</span></div>
+                                <div className="supply-text">
+                                    <span>FOUNDERS' BADGES CLAIMED</span>
+                                    <span>{mintedCount.toLocaleString()} / {totalSupply.toLocaleString()}</span>
+                                </div>
                                 <div className="progress-bar-background"><div className="progress-bar-foreground" style={{ width: `${(mintedCount / totalSupply) * 100}%` }}></div></div>
                             </div>
                             <div className="mint-action-area">
@@ -100,14 +97,11 @@ function HomePage() {
                             {feedback && <p className="feedback-text">{feedback}</p>}
                         </div>
                     </div>
-
-                    {/* --- RIGHT COLUMN --- */}
                     <div className="right-column">
                         <div className="dashboard-module">
                             <h2>DAO STATS</h2>
-                            <div className="stats-grid">
+                            <div className="stats-grid simplified">
                                 <div className="stat-item"><span className="stat-icon">👥</span><div className="stat-text-content"><span className="stat-value">{mintedCount.toLocaleString()}</span><span className="stat-label">Total Founders</span></div></div>
-                                <div className="stat-item"><span className="stat-icon">💰</span><div className="stat-text-content"><span className="stat-value">{treasuryBalance}</span><span className="stat-label">DAO Treasury</span></div></div>
                             </div>
                         </div>
                         <div className="dashboard-module">
@@ -115,7 +109,6 @@ function HomePage() {
                             <div className="proposal-list-container"><p className="proposal-item-empty">The floor is open. The first proposal can now be made.</p></div>
                             <a href={TALLY_VOTE_URL} target="_blank" rel="noopener noreferrer" className="view-all-link">Vote on Proposals →</a>
                         </div>
-                        {/* === SHAPE THE FUTURE CARD (RESTORED) === */}
                         <div className="dashboard-module">
                             <h2>SHAPE THE FUTURE</h2>
                             <p className="module-text">As a Founder, you have the power to create proposals and define the direction of the party. Make your voice heard.</p>
@@ -149,7 +142,7 @@ function HomePage() {
                     </div>
                 </div>
             </div>
-
+            
             {/* === JOIN THE CONVERSATION SECTION (RESTORED) === */}
             <div className="final-cta-section">
                 <h2>Join The Conversation</h2>
