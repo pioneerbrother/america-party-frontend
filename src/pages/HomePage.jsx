@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { ethers } from 'ethers';
 import { WalletContext } from '../contexts/WalletContext.jsx'; 
-import mainLogo from '/americaparty-logo.png';
+import mainLogo from '/americaparty-logo.png'; // Correct logo path
 import './HomePage.css';
 
 // --- Configuration & ABIs ---
@@ -22,7 +22,7 @@ function HomePage() {
     const [mintedCount, setMintedCount] = useState(0);
     const [totalSupply] = useState(10000);
     const [currentPrice, setCurrentPrice] = useState("...");
-    
+
     // --- Data Fetching Logic ---
     useEffect(() => {
         const fetchData = async () => {
@@ -32,10 +32,8 @@ function HomePage() {
                 const minterContract = new ethers.Contract(badgeMinterAddress, BadgeMinterABI.abi, readOnlyProvider);
                 const count = await minterContract.totalMinted();
 
-                // === THIS IS THE FINAL, UNBREAKABLE FIX ===
-                // We use a functional update to get the previous count.
-                // We ONLY update the state if the new number from the blockchain is HIGHER.
-                // This makes it impossible for the count to go backward due to a slow server.
+                // Only update if the new number from the blockchain is HIGHER.
+                // This makes it impossible for the count to go backward.
                 setMintedCount(prevCount => {
                     const newCount = Number(count);
                     return newCount > prevCount ? newCount : prevCount;
@@ -83,7 +81,7 @@ function HomePage() {
             
             // After success, we directly update with the latest count.
             const newCount = await minterContract.totalMinted();
-            setMintedCount(Number(newCount)); // This provides instant, correct feedback
+            setMintedCount(Number(newCount));
 
         } catch (error) {
             console.error("Purchase failed:", error);
@@ -93,12 +91,10 @@ function HomePage() {
         }
     };
     
-    
-    
-    // JSX variables
     const isSoldOut = mintedCount >= totalSupply;
-    const TALLY_PROPOSE_URL = `https://www.tally.xyz/gov/${governorAddress}/propose`;
-    const TALLY_VOTE_URL = `https://www.tally.xyz/gov/${governorAddress}`;
+    // --- FINAL FIX: Use Polygonscan links ---
+    const POLYGONSCAN_VOTE_URL = `https://polygonscan.com/address/${governorAddress}#writeContract`;
+    const POLYGONSCAN_PROPOSE_URL = `https://polygonscan.com/address/${governorAddress}#writeContract`;
     
     return (
         <div className="home-container">
@@ -138,12 +134,12 @@ function HomePage() {
                         <div className="dashboard-module">
                             <h2>RECENT PROPOSALS</h2>
                             <div className="proposal-list-container"><p className="proposal-item-empty">The floor is open. The first proposal can now be made.</p></div>
-                            <a href={TALLY_VOTE_URL} target="_blank" rel="noopener noreferrer" className="view-all-link">Vote on Proposals →</a>
+                            <a href={POLYGONSCAN_VOTE_URL} target="_blank" rel="noopener noreferrer" className="view-all-link">Vote on Proposals →</a>
                         </div>
                         <div className="dashboard-module">
                             <h2>SHAPE THE FUTURE</h2>
                             <p className="module-text">As a Founder, you have the power to create proposals and define the direction of the party. Make your voice heard.</p>
-                            <a href={TALLY_PROPOSE_URL} target="_blank" rel="noopener noreferrer" className="module-button">Create Your First Proposal</a>
+                            <a href={POLYGONSCAN_PROPOSE_URL} target="_blank" rel="noopener noreferrer" className="module-button">Create Your First Proposal</a>
                         </div>
                     </div>
                 </div>
